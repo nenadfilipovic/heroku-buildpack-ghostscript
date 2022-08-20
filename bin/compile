@@ -1,24 +1,58 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # bin/compile <build-dir> <cache-dir>
 
-echo "-----> Installing Ghostscript 9.10"
+set -e
 
+# Parse parameters.
 BUILD_DIR=$1
-PACKAGE="http://downloads.ghostscript.com/public/ghostscript-9.05.tar.gz"
 
-mkdir -p $LOCATION
-curl -O $PACKAGE -s
+# Formatting helpers.
+indent() {
+    sed -u 's/^/       /'
+}
+arrow() {
+    sed -u 's/^/-----> /'
+}
 
-echo "-----> Building runtime environment for Ghostscript"
+# Load version from environment, fallback to defaults.
+if [ -f $ENV_DIR/GS_VERSION_SEMVER ]; then
+    semver=$(cat $ENV_DIR/GS_VERSION_SEMVER)
+else
+    semver='9.56.1'
+fi
 
-tar xzvf ghostscript-9.05.tar.gz
-cd ghostscript-9.05
-./configure --disable-cups --disable-gtk --with-drivers=FILES
-make
-cp bin/gs ~/bin
+if [ -f $ENV_DIR/GS_VERSION ]; then
+    version=$(cat $ENV_DIR/GS_VERSION)
+else
+    version='9561'
+fi
 
-echo "Ghostscript version:"
-echo gs --version
+echo "Installing Ghostscript $semver" | arrow
+PACKAGE="https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs$version/ghostscript-$semver-linux-x86_64.tgz"
 
-cd ~
-rm -rf ghostscript-9.05*
+GS_VENDOR="$BUILD_DIR/vendor/ghostscript"
+rm -rf $GS_VENDOR/*
+mkdir -p $GS_VENDOR/bin
+
+GS_SOURCE_DIRECTORY="$GS_VENDOR/ghostscript-$semver"
+rm -rf $GS_SOURCE_DIRECTORY
+mkdir -p $GS_SOURCE_DIRECTORY
+
+echo "Fetching ghostscript binaries" | indent
+curl --no-progress-meter $PACKAGE -L -o - | tar xzf - -C $GS_SOURCE_DIRECTORY 2>&1 | indent
+
+GS_SOURCE_BINARY="$GS_SOURCE_DIRECTORY/ghostscript-$semver-linux-x86_64/gs-$version-linux-x86_64"
+mv $GS_SOURCE_BINARY $GS_VENDOR/bin/gs
+
+rm -rf $GS_SOURCE_DIRECTORY
+mkdir -p $BUILD_DIR/bin
+
+echo "Setting up ghostscript environment" | indent
+cp -R $GS_VENDOR/bin/* $BUILD_DIR/bin/
+
+mkdir -p $BUILD_DIR/.profile.d
+echo 'export PATH="$HOME/bin:$PATH"' > $BUILD_DIR/.profile.d/ghostscript.sh
+
+cat <<EOF > export
+export PATH=$BUILD_DIR/bin:$PATH
+EOF
