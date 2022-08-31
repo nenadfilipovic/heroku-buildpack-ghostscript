@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
 # bin/detect <build-dir>
 
-echo "Ghostscript 9.10"
-exit 0
-
+echo "ghostscript-buildpack" && exit 0
